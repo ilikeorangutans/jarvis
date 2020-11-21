@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/rs/zerolog v1.20.0
+	go.etcd.io/bbolt v1.3.5
 	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b // indirect
 	maunium.net/go/mautrix v0.7.13
 )
