@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +17,14 @@ import (
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
+
+type Reminder struct {
+	EventID id.EventID
+	Message string
+	When    time.Time
+	User    id.UserID
+	Room    id.RoomID
+}
 
 func NewBotStore(db *bolt.DB) (*BotStore, error) {
 	db.Update(func(tx *bolt.Tx) error {
@@ -31,7 +41,7 @@ type BotStore struct {
 }
 
 func (b *BotStore) SaveFilterID(userID id.UserID, filterID string) {
-	log.Info().Str("method", "SaveFilterID").Str("userID", userID.String()).Str("filterID", filterID).Send()
+	log.Debug().Str("method", "SaveFilterID").Str("userID", userID.String()).Str("filterID", filterID).Send()
 	b.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("bot"))
 		return bucket.Put([]byte("filter"), []byte(filterID))
@@ -39,12 +49,12 @@ func (b *BotStore) SaveFilterID(userID id.UserID, filterID string) {
 }
 
 func (b *BotStore) LoadFilterID(userID id.UserID) string {
-	log.Info().Str("method", "LoadFilterID").Str("userID", userID.String()).Send()
+	log.Debug().Str("method", "LoadFilterID").Str("userID", userID.String()).Send()
 	return ""
 }
 
 func (b *BotStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
-	log.Info().Str("method", "SaveNextBatch").Str("nextBatchToken", nextBatchToken).Send()
+	log.Debug().Str("method", "SaveNextBatch").Str("nextBatchToken", nextBatchToken).Send()
 	err := b.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("bot"))
 		return bucket.Put([]byte("batch"), []byte(nextBatchToken))
@@ -55,7 +65,7 @@ func (b *BotStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
 }
 
 func (b *BotStore) LoadNextBatch(userID id.UserID) string {
-	log.Info().Str("method", "LoadNextBatch").Str("userID", userID.String()).Send()
+	log.Debug().Str("method", "LoadNextBatch").Str("userID", userID.String()).Send()
 	result := ""
 	err := b.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("bot"))
@@ -85,7 +95,6 @@ func main() {
 	password := "secret"
 
 	deviceID := "KCPNDLBQUO"
-	lastWatermark := time.Now().Unix() * 1000
 
 	client, err := mautrix.NewClient(homeserverURL, "", "")
 	if err != nil {
@@ -111,6 +120,21 @@ func main() {
 	}
 	defer db.Close()
 
+	queue := make(chan Reminder, 10)
+	go func() {
+		// TODO needs a context here
+		for {
+			select {
+			case reminder := <-queue:
+				log.Info().Msg("got reminder")
+				duration := time.Until(reminder.When)
+				time.AfterFunc(duration, func() {
+					client.SendText(reminder.Room, fmt.Sprintf("%s, reminding you of %s", reminder.User.String(), reminder.Message))
+				})
+			}
+		}
+	}()
+
 	store, err := NewBotStore(db)
 	if err != nil {
 		log.Fatal().Err(err).Msg("creating bot store")
@@ -130,26 +154,62 @@ func main() {
 
 	// TODO can we just filter out past messages?
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
+	reminderRegex := regexp.MustCompile("\\A\\s*in\\s+([0-9]+)\\s+(second|minute|hour|day|week|month|year)s?\\s+(.*)\\z")
 	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
-		log.Info().Int64("ts", evt.Timestamp).Int64("wm", lastWatermark).Msg("message")
-		if evt.Timestamp < lastWatermark {
-			log.Info().Int64("ts", evt.Timestamp).Int64("wm", lastWatermark).Msg("igoring")
-			return
-		}
 		client.MarkRead(evt.RoomID, evt.ID)
 		message := evt.Content.AsMessage()
 
 		log.Info().Str("body", message.Body).Msg("message")
+		// TODO idea: catch everything with prefix  remind and the parse user. me is current user, or other user
 		if !strings.HasPrefix(strings.ToLower(message.Body), "remind me") {
 			return
 		}
 
-		client.SendText(evt.RoomID, fmt.Sprintf("you want me to remind you about %s", message.Body))
-	})
-	syncer.OnEventType(event.StateMember, func(source mautrix.EventSource, evt *event.Event) {
-		if evt.Timestamp < lastWatermark {
+		input := message.Body[9:len(message.Body)]
+		match := reminderRegex.FindStringSubmatch(input)
+
+		if len(match) == 0 {
+			client.SendText(evt.RoomID, fmt.Sprint("Sorry, I did not understand your request. You can ask me to remind you like this: remind me in 1 hour how awesome you are"))
 			return
 		}
+		num, _ := strconv.Atoi(match[1])
+		amount := time.Duration(num)
+		var unit time.Duration
+		switch match[2] {
+		case "hour":
+			unit = time.Hour
+		case "day":
+			unit = time.Hour * 24
+		case "week":
+			unit = time.Hour * 24 * 7
+		case "month":
+			unit = time.Hour * 24 * 30
+		case "year":
+			unit = time.Hour * 24 * 365
+		default:
+			unit = time.Second
+		}
+		duration := amount * unit
+		msg := match[3]
+		when := time.Now().Add(duration)
+
+		// TODO we can get the response from sendText and get the event id from it
+		resp, err := client.SendText(evt.RoomID, fmt.Sprintf("I'll remind you on %s %s", when.Local().Format("02-Jan-2006 15:04"), msg))
+		if err != nil {
+			log.Error().Err(err).Msg("sending message")
+		}
+
+		reminder := Reminder{
+			EventID: resp.EventID,
+			Message: msg,
+			When:    when,
+			User:    evt.Sender,
+			Room:    evt.RoomID,
+		}
+
+		queue <- reminder
+	})
+	syncer.OnEventType(event.StateMember, func(source mautrix.EventSource, evt *event.Event) {
 		membership := evt.Content.AsMember()
 		switch membership.Membership {
 		case event.MembershipInvite:
