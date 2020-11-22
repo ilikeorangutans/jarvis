@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ilikeorangutans/remind-me-bot/pkg/bot"
 	"github.com/ilikeorangutans/remind-me-bot/pkg/version"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -20,73 +21,6 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
-type Reminder struct {
-	EventID id.EventID
-	Message string
-	When    time.Time
-	User    id.UserID
-	Room    id.RoomID
-}
-
-func NewBotStore(db *bolt.DB) (*BotStore, error) {
-	db.Update(func(tx *bolt.Tx) error {
-		tx.CreateBucketIfNotExists([]byte("bot"))
-		return nil
-	})
-	return &BotStore{
-		db: db,
-	}, nil
-}
-
-type BotStore struct {
-	db *bolt.DB
-}
-
-func (b *BotStore) SaveFilterID(userID id.UserID, filterID string) {
-	b.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte("bot"))
-		return bucket.Put([]byte("filter"), []byte(filterID))
-	})
-}
-
-func (b *BotStore) LoadFilterID(userID id.UserID) string {
-	log.Debug().Str("method", "LoadFilterID").Str("userID", userID.String()).Send()
-	// TODO implement me
-	return ""
-}
-
-func (b *BotStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
-	err := b.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte("bot"))
-		return bucket.Put([]byte("batch"), []byte(nextBatchToken))
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("SaveNextBatch")
-	}
-}
-
-func (b *BotStore) LoadNextBatch(userID id.UserID) string {
-	result := ""
-	err := b.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte("bot"))
-		result = string(bucket.Get([]byte("batch")))
-		return nil
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("LoadNextBatch")
-	}
-
-	return result
-}
-
-func (b *BotStore) SaveRoom(room *mautrix.Room) {
-	panic("not implemented") // TODO: Implement
-}
-
-func (b *BotStore) LoadRoom(roomID id.RoomID) *mautrix.Room {
-	panic("not implemented") // TODO: Implement
-}
-
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
@@ -95,7 +29,7 @@ func main() {
 	homeserverURL := os.Getenv("HOMESERVER_URL")
 	dataPath := os.Getenv("DATA_PATH")
 
-	log.Info().Str("sha", version.SHA).Str("build-time", version.BuildTime).Str("data-path", dataPath).Str("homeserverURL", homeserverURL).Str("userID", userID).Msg("starting up...")
+	log.Info().Str("sha", version.SHA).Str("build-time", version.BuildTime).Str("data-path", dataPath).Str("homeserverURL", homeserverURL).Str("userID", userID).Msg("bot starting up")
 
 	if len(userID) == 0 || len(password) == 0 || len(homeserverURL) == 0 {
 		log.Fatal().Msgf("no username, password, or homeserver specified")
@@ -105,7 +39,6 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("authentication failed")
 	}
-
 	defer db.Close()
 
 	deviceID := ""
@@ -153,7 +86,7 @@ func main() {
 
 	log.Info().Str("device-id", loginResp.DeviceID.String()).Str("user-id", loginResp.UserID.String()).Msg("login successful")
 
-	queue := make(chan Reminder, 10)
+	queue := make(chan bot.Reminder, 10)
 	go func() {
 		// TODO needs a context here
 		for {
@@ -162,13 +95,14 @@ func main() {
 				log.Info().Msg("got reminder")
 				duration := time.Until(reminder.When)
 				time.AfterFunc(duration, func() {
-					client.SendText(reminder.Room, fmt.Sprintf("%s, reminding you of %s", reminder.User.String(), reminder.Message))
+					user, _, _ := reminder.User.Parse()
+					client.SendText(reminder.Room, fmt.Sprintf("%s, reminding you of %s", user, reminder.Message))
 				})
 			}
 		}
 	}()
 
-	store, err := NewBotStore(db)
+	store, err := bot.NewBotStore(db)
 	if err != nil {
 		log.Fatal().Err(err).Msg("creating bot store")
 	}
@@ -232,7 +166,7 @@ func main() {
 			log.Error().Err(err).Msg("sending message")
 		}
 
-		reminder := Reminder{
+		reminder := bot.Reminder{
 			EventID: resp.EventID,
 			Message: msg,
 			When:    when,
