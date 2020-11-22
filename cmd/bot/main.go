@@ -139,6 +139,9 @@ func main() {
 				client.SendNotice(evt.RoomID, fmt.Sprintf("sha %s, build time %s (%s)", version.SHA, humanize.Time(t), version.BuildTime))
 			case "help":
 				client.SendText(evt.RoomID, "I can remind you of things in the future. Just write a message like this: `remind me in 1 hour how cool this is`")
+			case "love you":
+				user, _, _ := evt.Sender.Parse()
+				client.SendText(evt.RoomID, fmt.Sprintf("I love you too, %s! ❤️", user))
 			default:
 				user, _, _ := evt.Sender.Parse()
 				client.SendText(evt.RoomID, fmt.Sprintf("Hi %s!", user))
