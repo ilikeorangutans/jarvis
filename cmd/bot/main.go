@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/ilikeorangutans/remind-me-bot/pkg/bot"
 	"github.com/ilikeorangutans/remind-me-bot/pkg/version"
 	"github.com/rs/zerolog"
@@ -126,7 +127,6 @@ func main() {
 		client.MarkRead(evt.RoomID, evt.ID)
 		message := evt.Content.AsMessage()
 
-		log.Info().Str("body", message.Body).Msg("message")
 		// TODO idea: catch everything with prefix  remind and the parse user. me is current user, or other user
 		if !strings.HasPrefix(strings.ToLower(message.Body), "remind me") {
 			return
@@ -143,6 +143,8 @@ func main() {
 		amount := time.Duration(num)
 		var unit time.Duration
 		switch match[2] {
+		case "minute":
+			unit = time.Minute
 		case "hour":
 			unit = time.Hour
 		case "day":
@@ -160,8 +162,7 @@ func main() {
 		msg := match[3]
 		when := time.Now().Add(duration)
 
-		// TODO we can get the response from sendText and get the event id from it
-		resp, err := client.SendText(evt.RoomID, fmt.Sprintf("I'll remind you on %s %s", when.Local().Format("02-Jan-2006 15:04"), msg))
+		resp, err := client.SendText(evt.RoomID, fmt.Sprintf("I'll remind you in %s: %s", humanize.Time(when), msg))
 		if err != nil {
 			log.Error().Err(err).Msg("sending message")
 		}
@@ -189,7 +190,7 @@ func main() {
 				return
 			}
 			joinedRooms[evt.RoomID] = struct{}{}
-			if _, err := client.SendNotice(evt.RoomID, "test-bot has joined this room"); err != nil {
+			if _, err := client.SendNotice(evt.RoomID, "reminder bot has joined this room"); err != nil {
 				log.Error().Err(err)
 				return
 			}
