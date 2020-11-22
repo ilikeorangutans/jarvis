@@ -120,13 +120,23 @@ func main() {
 		}
 	}
 
-	// TODO can we just filter out past messages?
 	syncer := client.Syncer.(*mautrix.DefaultSyncer)
 	reminderRegex := regexp.MustCompile("\\A\\s*in\\s+([0-9]+)\\s+(second|minute|hour|day|week|month|year)s?\\s+(.*)\\z")
 	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
 		client.MarkRead(evt.RoomID, evt.ID)
 		message := evt.Content.AsMessage()
 
+		if strings.HasPrefix(strings.ToLower(message.Body), userID) {
+			sub := message.Body[len(userID):len(message.Body)]
+			switch strings.TrimSpace(sub) {
+			case "version":
+				client.SendNotice(evt.RoomID, fmt.Sprintf("sha %s, build time %s", version.SHA, version.BuildTime))
+			default:
+				user, _, _ := evt.Sender.Parse()
+				client.SendText(evt.RoomID, fmt.Sprintf("Hi %s!", user))
+			}
+			return
+		}
 		// TODO idea: catch everything with prefix  remind and the parse user. me is current user, or other user
 		if !strings.HasPrefix(strings.ToLower(message.Body), "remind me") {
 			return
@@ -190,7 +200,7 @@ func main() {
 				return
 			}
 			joinedRooms[evt.RoomID] = struct{}{}
-			if _, err := client.SendNotice(evt.RoomID, "reminder bot has joined this room"); err != nil {
+			if _, err := client.SendNotice(evt.RoomID, fmt.Sprintf("%s has joined this room", userID)); err != nil {
 				log.Error().Err(err)
 				return
 			}
