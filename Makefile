@@ -9,7 +9,7 @@ run: target/linux-amd64/bot
 
 
 .PHONY: dist-all
-dist-all: target/linux-arm/bot
+dist-all: target/linux-arm/bot target/linux-amd64/bot
 
 target/%/:
 	mkdir -p $(@)

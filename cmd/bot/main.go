@@ -71,6 +71,7 @@ func main() {
 	}
 
 	if loginResp.DeviceID.String() != deviceID {
+		deviceID = loginResp.DeviceID.String()
 		log.Info().Str("deviceID", deviceID).Msg("new device id")
 
 		err = db.Update(func(tx *bolt.Tx) error {
@@ -97,7 +98,7 @@ func main() {
 				duration := time.Until(reminder.When)
 				time.AfterFunc(duration, func() {
 					user, _, _ := reminder.User.Parse()
-					client.SendText(reminder.Room, fmt.Sprintf("%s, reminding you of %s", user, reminder.Message))
+					client.SendText(reminder.Room, fmt.Sprintf("%s, reminding you from %s of %s", user, humanize.Time(reminder.Timestamp), reminder.Message))
 				})
 			}
 		}
@@ -130,7 +131,14 @@ func main() {
 			sub := message.Body[len(userID):len(message.Body)]
 			switch strings.TrimSpace(sub) {
 			case "version":
-				client.SendNotice(evt.RoomID, fmt.Sprintf("sha %s, build time %s", version.SHA, version.BuildTime))
+				t, err := time.Parse("2006-01-02T15:04:05-0700", version.BuildTime)
+				if err != nil {
+					log.Error().Err(err).Send()
+				}
+
+				client.SendNotice(evt.RoomID, fmt.Sprintf("sha %s, build time %s (%s)", version.SHA, humanize.Time(t), version.BuildTime))
+			case "help":
+				client.SendText(evt.RoomID, "I can remind you of things in the future. Just write a message like this: `remind me in 1 hour how cool this is`")
 			default:
 				user, _, _ := evt.Sender.Parse()
 				client.SendText(evt.RoomID, fmt.Sprintf("Hi %s!", user))
@@ -178,11 +186,12 @@ func main() {
 		}
 
 		reminder := bot.Reminder{
-			EventID: resp.EventID,
-			Message: msg,
-			When:    when,
-			User:    evt.Sender,
-			Room:    evt.RoomID,
+			EventID:   resp.EventID,
+			Message:   msg,
+			When:      when,
+			User:      evt.Sender,
+			Room:      evt.RoomID,
+			Timestamp: time.Now(),
 		}
 
 		queue <- reminder
