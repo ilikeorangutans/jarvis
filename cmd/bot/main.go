@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/ilikeorangutans/remind-me-bot/pkg/version"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	bolt "go.etcd.io/bbolt"
@@ -41,7 +43,6 @@ type BotStore struct {
 }
 
 func (b *BotStore) SaveFilterID(userID id.UserID, filterID string) {
-	log.Debug().Str("method", "SaveFilterID").Str("userID", userID.String()).Str("filterID", filterID).Send()
 	b.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("bot"))
 		return bucket.Put([]byte("filter"), []byte(filterID))
@@ -50,11 +51,11 @@ func (b *BotStore) SaveFilterID(userID id.UserID, filterID string) {
 
 func (b *BotStore) LoadFilterID(userID id.UserID) string {
 	log.Debug().Str("method", "LoadFilterID").Str("userID", userID.String()).Send()
+	// TODO implement me
 	return ""
 }
 
 func (b *BotStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
-	log.Debug().Str("method", "SaveNextBatch").Str("nextBatchToken", nextBatchToken).Send()
 	err := b.db.Update(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("bot"))
 		return bucket.Put([]byte("batch"), []byte(nextBatchToken))
@@ -65,7 +66,6 @@ func (b *BotStore) SaveNextBatch(userID id.UserID, nextBatchToken string) {
 }
 
 func (b *BotStore) LoadNextBatch(userID id.UserID) string {
-	log.Debug().Str("method", "LoadNextBatch").Str("userID", userID.String()).Send()
 	result := ""
 	err := b.db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte("bot"))
@@ -76,7 +76,6 @@ func (b *BotStore) LoadNextBatch(userID id.UserID) string {
 		log.Error().Err(err).Msg("LoadNextBatch")
 	}
 
-	log.Info().Str("method", "LoadNextBatch").Str("result", result).Send()
 	return result
 }
 
@@ -90,11 +89,36 @@ func (b *BotStore) LoadRoom(roomID id.RoomID) *mautrix.Room {
 
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-	homeserverURL := "https://matrix.ilikeorangutans.me"
-	userID := "test-bot"
-	password := "secret"
 
-	deviceID := "KCPNDLBQUO"
+	userID := os.Getenv("USER_ID")
+	password := os.Getenv("PASSWORD")
+	homeserverURL := os.Getenv("HOMESERVER_URL")
+	dataPath := os.Getenv("DATA_PATH")
+
+	log.Info().Str("sha", version.SHA).Str("build-time", version.BuildTime).Str("data-path", dataPath).Str("homeserverURL", homeserverURL).Str("userID", userID).Msg("starting up...")
+
+	if len(userID) == 0 || len(password) == 0 || len(homeserverURL) == 0 {
+		log.Fatal().Msgf("no username, password, or homeserver specified")
+	}
+
+	db, err := bolt.Open(filepath.Join(dataPath, "reminder-bot.db"), 0666, nil)
+	if err != nil {
+		log.Fatal().Err(err).Msg("authentication failed")
+	}
+
+	defer db.Close()
+
+	deviceID := ""
+	err = db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte("bot"))
+		if bucket != nil {
+			deviceID = string(bucket.Get([]byte("device-id")))
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msgf("loading device id")
+	}
 
 	client, err := mautrix.NewClient(homeserverURL, "", "")
 	if err != nil {
@@ -112,13 +136,22 @@ func main() {
 		log.Fatal().Err(err).Msg("authentication failed")
 	}
 
-	log.Info().Str("device-id", loginResp.DeviceID.String()).Str("user-id", loginResp.UserID.String()).Msg("login successful")
+	if loginResp.DeviceID.String() != deviceID {
+		log.Info().Str("deviceID", deviceID).Msg("new device id")
 
-	db, err := bolt.Open("my.db", 0666, nil)
-	if err != nil {
-		log.Fatal().Err(err).Msg("authentication failed")
+		err = db.Update(func(tx *bolt.Tx) error {
+			bucket, err := tx.CreateBucketIfNotExists([]byte("bot"))
+			if err != nil {
+				return err
+			}
+			return bucket.Put([]byte("device-id"), []byte(deviceID))
+		})
+		if err != nil {
+			log.Fatal().Err(err).Msgf("saving device id")
+		}
 	}
-	defer db.Close()
+
+	log.Info().Str("device-id", loginResp.DeviceID.String()).Str("user-id", loginResp.UserID.String()).Msg("login successful")
 
 	queue := make(chan Reminder, 10)
 	go func() {
