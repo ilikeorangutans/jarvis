@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -24,7 +25,9 @@ import (
 )
 
 func main() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	if _, ok := os.LookupEnv("FANCY_LOGS"); ok {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	}
 
 	userID := os.Getenv("USER_ID")
 	password := os.Getenv("PASSWORD")
@@ -95,7 +98,7 @@ func main() {
 		for {
 			select {
 			case reminder := <-queue:
-				log.Info().Msg("got reminder")
+				log.Info().Str("user-id", reminder.User.String()).Str("reminder", reminder.Message).Msg("got reminder")
 				duration := time.Until(reminder.When)
 				time.AfterFunc(duration, func() {
 					user, _, _ := reminder.User.Parse()
@@ -149,6 +152,10 @@ func main() {
 			case "love you":
 				user, _, _ := evt.Sender.Parse()
 				client.SendText(evt.RoomID, fmt.Sprintf("I love you too, %s! ❤️", user))
+			case "spam":
+				for i := 0; i < 20; i++ {
+					client.SendText(evt.RoomID, "spam")
+				}
 			default:
 				user, _, _ := evt.Sender.Parse()
 				client.SendText(evt.RoomID, fmt.Sprintf("Hi %s!", user))
@@ -188,7 +195,7 @@ func main() {
 		}
 		duration := amount * unit
 		msg := match[3]
-		when := time.Now().Add(duration)
+		when := time.Now().Add(duration).Add(1 * time.Second) // Add one second so the humanized time, which is rounded, is closer to the expected value.
 
 		resp, err := client.SendText(evt.RoomID, fmt.Sprintf("I'll remind you in %s: %s", humanize.Time(when), msg))
 		if err != nil {
@@ -243,8 +250,16 @@ func main() {
 	}()
 
 	go func() {
-		log.Info().Msg("starting sync")
-		client.Sync()
+		for {
+			log.Info().Msg("starting sync")
+			err := client.Sync()
+			if errors.Is(err, mautrix.MLimitExceeded) {
+				log.Warn().Err(err).Msg("limit exceeded, backing off")
+				time.Sleep(10 * time.Second)
+			} else if err != nil {
+				log.Fatal().Err(err).Msg("sync failed")
+			}
+		}
 	}()
 
 	<-shutdown

@@ -6,7 +6,7 @@ SOURCES=$(shell find ./ -type f -iname '*.go')
 
 .PHONY: run
 run: target/linux-amd64/bot
-	./target/linux-amd64/bot
+	FANCY_LOGS=1 ./target/linux-amd64/bot
 
 
 .PHONY: dist-all
