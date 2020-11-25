@@ -33,6 +33,7 @@ func main() {
 	password := os.Getenv("PASSWORD")
 	homeserverURL := os.Getenv("HOMESERVER_URL")
 	dataPath := os.Getenv("DATA_PATH")
+	startTime := time.Now().Unix() * 1000
 
 	log.Info().Str("sha", version.SHA).Str("build-time", version.BuildTime).Str("data-path", dataPath).Str("homeserverURL", homeserverURL).Str("userID", userID).Msg("bot starting up")
 
@@ -130,6 +131,10 @@ func main() {
 	syncer.OnEventType(event.EventMessage, func(source mautrix.EventSource, evt *event.Event) {
 		client.MarkRead(evt.RoomID, evt.ID)
 		message := evt.Content.AsMessage()
+
+		if evt.Timestamp < startTime {
+			return
+		}
 
 		if strings.HasPrefix(strings.ToLower(message.Body), userID) {
 			sub := message.Body[len(userID):len(message.Body)]
