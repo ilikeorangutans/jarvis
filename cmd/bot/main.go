@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -138,7 +139,13 @@ func main() {
 
 				client.SendNotice(evt.RoomID, fmt.Sprintf("sha %s, build time %s (%s)", version.SHA, humanize.Time(t), version.BuildTime))
 			case "help":
-				client.SendText(evt.RoomID, "I can remind you of things in the future. Just write a message like this: `remind me in 1 hour how cool this is`")
+				// TODO trying to get html messages to work
+				client.SendMessageEvent(evt.RoomID, event.EventMessage, event.MessageEventContent{
+					MsgType:       event.MsgText,
+					Body:          "I can remind you of things in the future. Just write a message like this: `remind me in 1 hour how cool this is`",
+					FormattedBody: "I can remind you of things in the future. Just write a message like this: <tt>remind me in 1 hour how cool this is</tt>",
+					Format:        event.FormatHTML,
+				})
 			case "love you":
 				user, _, _ := evt.Sender.Parse()
 				client.SendText(evt.RoomID, fmt.Sprintf("I love you too, %s! ❤️", user))
@@ -227,6 +234,13 @@ func main() {
 
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt)
+
+	go func() {
+		http.HandleFunc("/services/ping", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("pong"))
+		})
+		http.ListenAndServe(":8080", nil)
+	}()
 
 	go func() {
 		log.Info().Msg("starting sync")
