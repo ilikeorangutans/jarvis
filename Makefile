@@ -4,6 +4,7 @@ DIST_LD_FLAGS="-X github.com/ilikeorangutans/remind-me-bot/pkg/version.SHA=$(SHA
 
 SOURCES=$(shell find ./ -type f -iname '*.go')
 
+.PHONY: run
 run: target/linux-amd64/bot
 	./target/linux-amd64/bot
 
@@ -20,5 +21,12 @@ target/linux-arm/bot: target/linux-arm/ $(SOURCES)
 target/linux-amd64/bot: target/linux-amd64/ $(SOURCES)
 	GOOS=linux GOARCH=amd64 go build -ldflags $(DIST_LD_FLAGS) -o target/linux-amd64/bot ./cmd/bot/main.go
 
+.PHONY: clean
 clean:
 	-rm -rf target
+
+.PHONY: docker
+docker: target/linux-arm/bot
+	docker buildx build -f Dockerfile . -t registry.ilikeorangutans.me/apps/reminder-bot:$(SHA) -t registry.ilikeorangutans.me/apps/reminder-bot:latest --platform  linux/arm/v7 --load
+	docker push registry.ilikeorangutans.me/apps/reminder-bot:$(SHA)
+	docker push registry.ilikeorangutans.me/apps/reminder-bot:latest
