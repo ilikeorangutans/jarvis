@@ -32,6 +32,7 @@ func main() {
 	password := os.Getenv("PASSWORD")
 	homeserverURL := os.Getenv("HOMESERVER_URL")
 	dataPath := os.Getenv("DATA_PATH")
+	startTime := time.Now()
 	log.Info().Str("sha", version.SHA).Str("build-time", version.BuildTime).Str("data-path", dataPath).Str("homeserverURL", homeserverURL).Str("userID", userID).Msg("Jarvis starting up")
 
 	if len(userID) == 0 || len(password) == 0 || len(homeserverURL) == 0 {
@@ -70,6 +71,14 @@ func main() {
 			return nil
 		},
 		predicates.MessageMatching(regexp.MustCompile("version")),
+		predicates.AtUser(id.UserID(userID)),
+	)
+	b.On(
+		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
+			client.SendText(evt.RoomID, fmt.Sprintf("Uptime %s", humanize.Time(startTime)))
+			return nil
+		},
+		predicates.MessageMatching(regexp.MustCompile("uptime")),
 		predicates.AtUser(id.UserID(userID)),
 	)
 
