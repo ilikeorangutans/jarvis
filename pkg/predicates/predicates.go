@@ -1,0 +1,37 @@
+package predicates
+
+import (
+	"regexp"
+	"strings"
+
+	"maunium.net/go/mautrix"
+	"maunium.net/go/mautrix/event"
+	"maunium.net/go/mautrix/id"
+)
+
+type EventPredicate func(source mautrix.EventSource, evt *event.Event) bool
+
+func MessageMatching(r *regexp.Regexp) EventPredicate {
+	return func(source mautrix.EventSource, evt *event.Event) bool {
+		if evt.Type != event.EventMessage {
+			return false
+		}
+
+		msg := evt.Content.AsMessage()
+
+		return r.MatchString(msg.Body)
+	}
+}
+
+func AtUser(userID id.UserID) EventPredicate {
+	return func(source mautrix.EventSource, evt *event.Event) bool {
+		if evt.Type != event.EventMessage {
+			return false
+		}
+
+		msg := evt.Content.AsMessage()
+
+		user, _, _ := userID.Parse()
+		return strings.HasPrefix(strings.TrimSpace(msg.Body), user)
+	}
+}
