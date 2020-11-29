@@ -17,6 +17,7 @@ import (
 
 type MatrixClient interface {
 	SendText(id.RoomID, string)
+	SendNotice(id.RoomID, string)
 	SetPresence(event.Presence)
 }
 
@@ -61,6 +62,14 @@ func (a *AsyncMatrixClient) Start(ctx context.Context) error {
 		}
 	}()
 	return nil
+}
+
+func (a *AsyncMatrixClient) SendNotice(roomID id.RoomID, message string) {
+	a.logger.Info().Str("message", message).Msg("SendText")
+	a.queue <- func(ctx context.Context) error {
+		_, err := a.client.SendNotice(roomID, message)
+		return err
+	}
 }
 
 func (a *AsyncMatrixClient) SendText(roomID id.RoomID, message string) {

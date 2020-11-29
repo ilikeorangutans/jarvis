@@ -27,6 +27,10 @@ func main() {
 	if _, ok := os.LookupEnv("FANCY_LOGS"); ok {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if _, ok := os.LookupEnv("DEBUG"); ok {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
 
 	userID := os.Getenv("USER_ID")
 	password := os.Getenv("PASSWORD")
@@ -64,21 +68,13 @@ func main() {
 				log.Error().Err(err).Send()
 			}
 
-			client.SendText(
+			client.SendNotice(
 				evt.RoomID,
-				fmt.Sprintf("sha %s, build time %s (%s)", version.SHA, humanize.Time(t), version.BuildTime),
+				fmt.Sprintf("running since %s, sha %s, build time %s (%s)", humanize.Time(startTime), version.SHA, humanize.Time(t), version.BuildTime),
 			)
 			return nil
 		},
-		predicates.MessageMatching(regexp.MustCompile("version")),
-		predicates.AtUser(id.UserID(userID)),
-	)
-	b.On(
-		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
-			client.SendText(evt.RoomID, fmt.Sprintf("Uptime %s", humanize.Time(startTime)))
-			return nil
-		},
-		predicates.MessageMatching(regexp.MustCompile("uptime")),
+		predicates.MessageMatching(regexp.MustCompile("status")),
 		predicates.AtUser(id.UserID(userID)),
 	)
 
