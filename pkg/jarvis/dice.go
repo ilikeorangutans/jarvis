@@ -15,7 +15,7 @@ import (
 )
 
 func AddDiceHandler(b *bot.Bot) {
-	r := regexp.MustCompile("\\A([0-9]+\\s+)?dice\\s+roll\\s*")
+	r := regexp.MustCompile(`(?i)\A([0-9]+\s+)?dice\s+roll\s*`)
 	b.On(func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
 		msg := evt.Content.AsMessage()
 
@@ -35,7 +35,7 @@ func AddDiceHandler(b *bot.Bot) {
 		for i := 0; i < diceRoll; i++ {
 			rolls = append(rolls, fmt.Sprintf("%d", (b[i]%6+1)))
 		}
-		client.SendText(evt.RoomID, fmt.Sprintf("I've rolled the dice for you: %s", strings.Join(rolls, ", ")))
+		client.SendText(evt.RoomID, fmt.Sprintf("🎲 I've rolled the dice for you: %s", strings.Join(rolls, ", ")))
 		return nil
 	}, predicates.MessageMatching(r))
 }
