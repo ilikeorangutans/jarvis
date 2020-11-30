@@ -15,6 +15,7 @@ import (
 	"github.com/ilikeorangutans/remind-me-bot/pkg/jarvis"
 	"github.com/ilikeorangutans/remind-me-bot/pkg/predicates"
 	"github.com/ilikeorangutans/remind-me-bot/pkg/version"
+	"github.com/kelseyhightower/envconfig"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	bolt "go.etcd.io/bbolt"
@@ -23,37 +24,42 @@ import (
 	"maunium.net/go/mautrix/id"
 )
 
+type Config struct {
+	FancyLogs     bool `split_words:"true"`
+	Debug         bool
+	HomeserverURL *url.URL `split_words:"true" required:"true"`
+	UserID        string   `split_words:"true" required:"true"`
+	Password      string   `split_words:"true" required:"true"`
+	DataPath      string   `split_words:"true" required:"true"`
+}
+
 func main() {
-	if _, ok := os.LookupEnv("FANCY_LOGS"); ok {
+	var config Config
+	if err := envconfig.Process("jarvis", &config); err != nil {
+		log.Fatal().Err(err).Send()
+	}
+
+	if config.FancyLogs {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	if _, ok := os.LookupEnv("DEBUG"); ok {
+	if config.Debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	userID := os.Getenv("USER_ID")
-	password := os.Getenv("PASSWORD")
-	homeserverURL := os.Getenv("HOMESERVER_URL")
-	dataPath := os.Getenv("DATA_PATH")
 	startTime := time.Now()
-	log.Info().Str("sha", version.SHA).Str("build-time", version.BuildTime).Str("data-path", dataPath).Str("homeserverURL", homeserverURL).Str("userID", userID).Msg("Jarvis starting up")
+	log.Info().Str("log-level", zerolog.GlobalLevel().String()).Str("sha", version.SHA).Str("build-time", version.BuildTime).Str("data-path", config.DataPath).Str("homeserverURL", config.HomeserverURL.String()).Str("userID", config.UserID).Msg("Jarvis starting up")
 
-	if len(userID) == 0 || len(password) == 0 || len(homeserverURL) == 0 {
-		log.Fatal().Msgf("no username, password, or homeserver specified")
-	}
-
-	db, err := bolt.Open(filepath.Join(dataPath, "reminder-bot.db"), 0666, nil)
+	db, err := bolt.Open(filepath.Join(config.DataPath, "reminder-bot.db"), 0666, nil)
 	if err != nil {
 		log.Fatal().Err(err).Msg("authentication failed")
 	}
 	defer db.Close()
 
-	u, _ := url.Parse(homeserverURL)
 	botConfig := bot.BotConfiguration{
-		Password:      password,
-		HomeserverURL: u,
-		Username:      userID,
+		Password:      config.Password,
+		HomeserverURL: config.HomeserverURL,
+		Username:      config.UserID,
 	}
 
 	botStorage, err := bot.NewBoltBotStorage("jarvis", db)
@@ -75,7 +81,7 @@ func main() {
 			return nil
 		},
 		predicates.MessageMatching(regexp.MustCompile("status")),
-		predicates.AtUser(id.UserID(userID)),
+		predicates.AtUser(id.UserID(config.UserID)),
 	)
 
 	signals := make(chan os.Signal, 1)
