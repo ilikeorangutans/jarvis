@@ -4,12 +4,25 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
 )
 
 type EventPredicate func(source mautrix.EventSource, evt *event.Event) bool
+
+func All(predicates ...EventPredicate) EventPredicate {
+	return func(source mautrix.EventSource, evt *event.Event) bool {
+		for _, p := range predicates {
+			if !p(source, evt) {
+				return false
+			}
+		}
+
+		return true
+	}
+}
 
 func MessageMatching(r *regexp.Regexp) EventPredicate {
 	return func(source mautrix.EventSource, evt *event.Event) bool {
@@ -20,6 +33,13 @@ func MessageMatching(r *regexp.Regexp) EventPredicate {
 		msg := evt.Content.AsMessage()
 
 		return r.MatchString(msg.Body)
+	}
+}
+
+func NotFromUser(userID id.UserID) EventPredicate {
+	return func(source mautrix.EventSource, evt *event.Event) bool {
+		log.Info().Str("evt.Sender", evt.Sender.String()).Str("userID", userID.String()).Msg("comparing")
+		return evt.Sender != userID
 	}
 }
 

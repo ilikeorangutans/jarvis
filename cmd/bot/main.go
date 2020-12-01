@@ -52,7 +52,7 @@ func main() {
 
 	db, err := bolt.Open(filepath.Join(config.DataPath, "reminder-bot.db"), 0666, nil)
 	if err != nil {
-		log.Fatal().Err(err).Msg("authentication failed")
+		log.Fatal().Err(err).Msg("opening database failed")
 	}
 	defer db.Close()
 
@@ -66,7 +66,12 @@ func main() {
 	b, err := bot.NewBot(botConfig, botStorage)
 	ctx, cancel := context.WithCancel(context.Background())
 
+	if err := b.Authenticate(ctx); err != nil {
+		log.Fatal().Err(err).Msg("authentication failed")
+	}
+
 	jarvis.AddDiceHandler(b)
+	jarvis.AddWeatherHandler(ctx, b)
 	b.On(
 		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
 			t, err := time.Parse("2006-01-02T15:04:05-0700", version.BuildTime)

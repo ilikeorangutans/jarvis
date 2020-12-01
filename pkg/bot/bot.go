@@ -121,11 +121,10 @@ type Bot struct {
 	storage  BotStorage
 	handlers []Handler
 	matrix   *AsyncMatrixClient
+	UserID   id.UserID
 }
 
-func (b *Bot) Run(ctx context.Context) error {
-	// TODO do we need a separate cancel context?
-
+func (b *Bot) Authenticate(ctx context.Context) error {
 	deviceID, err := b.storage.LoadDeviceID()
 	if err != nil {
 		return fmt.Errorf("could not load device id: %w", err)
@@ -142,6 +141,8 @@ func (b *Bot) Run(ctx context.Context) error {
 		return fmt.Errorf("authentication failed: %w", err)
 	}
 
+	b.UserID = loginResp.UserID
+
 	if loginResp.DeviceID != deviceID {
 		deviceID = loginResp.DeviceID
 		if err := b.storage.StoreDeviceID(deviceID); err != nil {
@@ -150,6 +151,12 @@ func (b *Bot) Run(ctx context.Context) error {
 	}
 
 	b.logger.Info().Str("device-id", loginResp.DeviceID.String()).Str("user-id", loginResp.UserID.String()).Msg("login successful")
+
+	return nil
+}
+
+func (b *Bot) Run(ctx context.Context) error {
+	// TODO do we need a separate cancel context?
 
 	if err := b.respectLimits(b.client.SetPresence(event.PresenceOnline)); err != nil {
 		return fmt.Errorf("setting presence failed: %w", err)
