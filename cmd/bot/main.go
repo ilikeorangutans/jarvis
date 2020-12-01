@@ -82,6 +82,12 @@ func main() {
 	jarvis.AddWeatherHandler(ctx, b)
 	b.On(
 		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
+			return nil
+		},
+		predicates.InvitedToRoom(),
+	)
+	b.On(
+		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
 			t, err := time.Parse("2006-01-02T15:04:05-0700", version.BuildTime)
 			if err != nil {
 				log.Error().Err(err).Send()

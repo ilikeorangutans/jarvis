@@ -55,3 +55,9 @@ func AtUser(userID id.UserID) EventPredicate {
 		return strings.HasPrefix(strings.TrimSpace(msg.Body), user)
 	}
 }
+
+func InvitedToRoom() EventPredicate {
+	return func(source mautrix.EventSource, evt *event.Event) bool {
+		return evt.Type == event.StateMember && evt.Content.AsMember().Membership == event.MembershipInvite
+	}
+}

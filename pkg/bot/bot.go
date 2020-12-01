@@ -16,6 +16,7 @@ import (
 )
 
 type MatrixClient interface {
+	JoinRoomByID(id.RoomID)
 	SendText(id.RoomID, string)
 	SendNotice(id.RoomID, string)
 	SetPresence(event.Presence)
@@ -65,7 +66,7 @@ func (a *AsyncMatrixClient) Start(ctx context.Context) error {
 }
 
 func (a *AsyncMatrixClient) SendNotice(roomID id.RoomID, message string) {
-	a.logger.Info().Str("message", message).Msg("SendText")
+	a.logger.Debug().Str("message", message).Msg("SendNotice")
 	a.queue <- func(ctx context.Context) error {
 		_, err := a.client.SendNotice(roomID, message)
 		return err
@@ -73,13 +74,20 @@ func (a *AsyncMatrixClient) SendNotice(roomID id.RoomID, message string) {
 }
 
 func (a *AsyncMatrixClient) SendText(roomID id.RoomID, message string) {
-	a.logger.Info().Str("message", message).Msg("SendText")
+	a.logger.Debug().Str("message", message).Msg("SendText")
 	a.queue <- func(ctx context.Context) error {
 		_, err := a.client.SendText(roomID, message)
 		return err
 	}
 }
 
+func (a *AsyncMatrixClient) JoinRoomByID(roomID id.RoomID) {
+	a.logger.Debug().Msg("JoinRoomByID")
+	a.queue <- func(ctx context.Context) error {
+		_, err := a.client.JoinRoomByID(roomID)
+		return err
+	}
+}
 func (a *AsyncMatrixClient) SetPresence(presence event.Presence) {
 	panic("not implemented") // TODO: Implement
 }
