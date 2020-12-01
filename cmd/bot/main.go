@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -46,6 +47,13 @@ func main() {
 	if config.Debug {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
+
+	go func() {
+		http.HandleFunc("/services/ping", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte("pong"))
+		})
+		http.ListenAndServe(":8080", nil)
+	}()
 
 	startTime := time.Now()
 	log.Info().Str("log-level", zerolog.GlobalLevel().String()).Str("sha", version.SHA).Str("build-time", version.BuildTime).Str("data-path", config.DataPath).Str("homeserverURL", config.HomeserverURL.String()).Str("userID", config.UserID).Msg("Jarvis starting up")
@@ -307,13 +315,6 @@ func main() {
 //
 //	shutdown := make(chan os.Signal, 1)
 //	signal.Notify(shutdown, os.Interrupt)
-//
-//	go func() {
-//		http.HandleFunc("/services/ping", func(w http.ResponseWriter, r *http.Request) {
-//			w.Write([]byte("pong"))
-//		})
-//		http.ListenAndServe(":8080", nil)
-//	}()
 //
 //	go func() {
 //		for {
