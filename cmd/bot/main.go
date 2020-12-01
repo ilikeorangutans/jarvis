@@ -82,6 +82,7 @@ func main() {
 	jarvis.AddWeatherHandler(ctx, b)
 	b.On(
 		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
+			client.JoinRoomByID(evt.RoomID)
 			return nil
 		},
 		predicates.InvitedToRoom(),
