@@ -15,7 +15,7 @@ target/%/:
 	mkdir -p $(@)
 
 target/linux-arm/bot: target/linux-arm/ $(SOURCES)
-	GOOS=linux GOARCH=arm go build -ldflags $(DIST_LD_FLAGS) -o target/linux-arm/bot ./cmd/bot/main.go
+	GOOS=linux GOARCH=arm GOARM=7 go build -ldflags $(DIST_LD_FLAGS) -o target/linux-arm/bot ./cmd/bot/main.go
 
 target/linux-amd64/bot: target/linux-amd64/ $(SOURCES)
 	GOOS=linux GOARCH=amd64 go build -ldflags $(DIST_LD_FLAGS) -o target/linux-amd64/bot ./cmd/bot/main.go
@@ -26,6 +26,6 @@ clean:
 
 .PHONY: docker
 docker: target/linux-arm/bot
-	docker buildx build -f Dockerfile . -t registry.ilikeorangutans.me/apps/reminder-bot:$(SHA) -t registry.ilikeorangutans.me/apps/reminder-bot:latest --platform  linux/arm/v7 --load
-	docker push registry.ilikeorangutans.me/apps/reminder-bot:$(SHA)
-	docker push registry.ilikeorangutans.me/apps/reminder-bot:latest
+	docker buildx build -f Dockerfile . -t registry.ilikeorangutans.me/apps/jarvis:$(SHA) -t registry.ilikeorangutans.me/apps/jarvis:latest --platform  linux/arm/v7 --load
+	docker push registry.ilikeorangutans.me/apps/jarvis:$(SHA)
+	docker push registry.ilikeorangutans.me/apps/jarvis:latest
