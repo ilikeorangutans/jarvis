@@ -1,4 +1,4 @@
-module github.com/ilikeorangutans/remind-me-bot
+module github.com/ilikeorangutans/jarvis
 
 go 1.13
 

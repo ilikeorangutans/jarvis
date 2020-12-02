@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ilikeorangutans/remind-me-bot/pkg/bot"
-	"github.com/ilikeorangutans/remind-me-bot/pkg/predicates"
+	"github.com/ilikeorangutans/jarvis/pkg/bot"
+	"github.com/ilikeorangutans/jarvis/pkg/predicates"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 )

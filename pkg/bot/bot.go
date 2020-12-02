@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/ilikeorangutans/remind-me-bot/pkg/predicates"
+	"github.com/ilikeorangutans/jarvis/pkg/predicates"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"maunium.net/go/mautrix"
