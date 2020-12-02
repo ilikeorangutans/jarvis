@@ -1,3 +1,3 @@
-# remind-me-bot
+# jarvis
 
-A matrix that reminds you of things. A simple experiment to learn more about matrix.
+A matrix bot for my matrix homeserver.
