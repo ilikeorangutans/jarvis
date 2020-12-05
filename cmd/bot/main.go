@@ -56,7 +56,15 @@ func main() {
 	}()
 
 	startTime := time.Now()
-	log.Info().Str("log-level", zerolog.GlobalLevel().String()).Str("sha", version.SHA).Str("build-time", version.BuildTime).Str("data-path", config.DataPath).Str("homeserverURL", config.HomeserverURL.String()).Str("userID", config.UserID).Msg("Jarvis starting up")
+	log.
+		Info().
+		Str("log-level", zerolog.GlobalLevel().String()).
+		Str("sha", version.SHA).
+		Str("build-time", version.BuildTime).
+		Str("data-path", config.DataPath).
+		Str("homeserverURL", config.HomeserverURL.String()).
+		Str("userID", config.UserID).
+		Msg("Jarvis starting up")
 
 	db, err := bolt.Open(filepath.Join(config.DataPath, "reminder-bot.db"), 0666, nil)
 	if err != nil {
