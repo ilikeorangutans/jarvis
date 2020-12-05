@@ -11,7 +11,6 @@ import (
 
 	"github.com/ilikeorangutans/jarvis/pkg/bot"
 	"github.com/ilikeorangutans/jarvis/pkg/predicates"
-	"github.com/rs/zerolog/log"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 )
@@ -23,25 +22,13 @@ func AddWeatherHandler(ctx context.Context, b *bot.Bot) {
 	b.On(
 		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
 			client.SendText(evt.RoomID, "Please wait while I fetch the forecast for you...")
-			resp, err := http.Get(fmt.Sprintf("https://weather.gc.ca/rss/city/%s_e.xml", cityCode))
+			forecast, err := WeatherForecast(ctx, cityCode, formatFeed)
 			if err != nil {
 				client.SendText(evt.RoomID, fmt.Sprintf("I'm unable to retrieve the forecast. 😔 (%s)", err.Error()))
 				return nil
 			}
-			defer resp.Body.Close()
 
-			var feed Feed
-			data, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				client.SendText(evt.RoomID, fmt.Sprintf("I'm unable to retrieve the forecast. 😔 (%s)", err.Error()))
-				return nil
-			}
-			// TODO error handle
-			if err := xml.Unmarshal(data, &feed); err != nil {
-				log.Error().Err(err).Msg("decoding xml")
-			}
-
-			client.SendText(evt.RoomID, formatFeed(feed))
+			client.SendText(evt.RoomID, forecast)
 			return nil
 		},
 
@@ -52,7 +39,27 @@ func AddWeatherHandler(ctx context.Context, b *bot.Bot) {
 	)
 }
 
-func formatFeed(feed Feed) string {
+func WeatherForecast(ctx context.Context, cityCode string, formatWeather func(Feed) (string, error)) (string, error) {
+	resp, err := http.Get(fmt.Sprintf("https://weather.gc.ca/rss/city/%s_e.xml", cityCode))
+	if err != nil {
+		return "", fmt.Errorf("HTTP GET failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var feed Feed
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("unable to read response: %w", err)
+	}
+	// TODO error handle
+	if err := xml.Unmarshal(data, &feed); err != nil {
+		return "", fmt.Errorf("unable to parse XML: %w", err)
+	}
+
+	return formatWeather(feed)
+}
+
+func formatFeed(feed Feed) (string, error) {
 	// TODO build html
 	var builder strings.Builder
 	builder.WriteString("Weather for ")
@@ -68,7 +75,7 @@ func formatFeed(feed Feed) string {
 		builder.WriteString(feed.Entries[i].Title)
 	}
 
-	return builder.String()
+	return builder.String(), nil
 }
 
 type Feed struct {
