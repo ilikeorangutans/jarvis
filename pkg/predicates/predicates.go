@@ -1,6 +1,7 @@
 package predicates
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -21,6 +22,20 @@ func All(predicates ...EventPredicate) EventPredicate {
 		}
 
 		return true
+	}
+}
+
+func Reaction() EventPredicate {
+	return func(source mautrix.EventSource, evt *event.Event) bool {
+		if evt.Type != event.EventReaction {
+			return false
+		}
+
+		reaction := evt.Content.AsReaction()
+
+		log.Info().Str("reaction", fmt.Sprintf("%v", reaction)).Str("key", reaction.RelatesTo.Key).Msg("Got reaction")
+
+		return false
 	}
 }
 

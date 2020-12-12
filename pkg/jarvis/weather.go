@@ -22,7 +22,7 @@ func AddWeatherHandler(ctx context.Context, b *bot.Bot) {
 	b.On(
 		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
 			client.SendText(evt.RoomID, "Please wait while I fetch the forecast for you...")
-			forecast, err := WeatherForecast(ctx, cityCode, formatFeed)
+			forecast, err := WeatherForecast(ctx, cityCode, FormatFeed)
 			if err != nil {
 				client.SendText(evt.RoomID, fmt.Sprintf("I'm unable to retrieve the forecast. 😔 (%s)", err.Error()))
 				return nil
@@ -59,7 +59,7 @@ func WeatherForecast(ctx context.Context, cityCode string, formatWeather func(Fe
 	return formatWeather(feed)
 }
 
-func formatFeed(feed Feed) (string, error) {
+func FormatFeed(feed Feed) (string, error) {
 	// TODO build html
 	var builder strings.Builder
 	builder.WriteString("Weather for ")

@@ -88,6 +88,7 @@ func (a *AsyncMatrixClient) JoinRoomByID(roomID id.RoomID) {
 		return err
 	}
 }
+
 func (a *AsyncMatrixClient) SetPresence(presence event.Presence) {
 	panic("not implemented") // TODO: Implement
 }
@@ -130,6 +131,10 @@ type Bot struct {
 	handlers []Handler
 	matrix   *AsyncMatrixClient
 	UserID   id.UserID
+}
+
+func (b *Bot) Client() MatrixClient {
+	return b.matrix
 }
 
 func (b *Bot) Authenticate(ctx context.Context) error {
@@ -177,6 +182,10 @@ func (b *Bot) Run(ctx context.Context) error {
 			if evt.Type == t {
 				return
 			}
+		}
+
+		if evt.Sender == b.UserID {
+			return
 		}
 
 		log.Info().Str("source", source.String()).Str("sender", evt.Sender.String()).Str("type", evt.Type.Type).Msg("event")
