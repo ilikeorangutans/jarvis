@@ -18,6 +18,7 @@ import (
 type MatrixClient interface {
 	JoinRoomByID(id.RoomID)
 	SendText(id.RoomID, string)
+	SendHTML(id.RoomID, string)
 	SendNotice(id.RoomID, string)
 	SetPresence(event.Presence)
 }
@@ -73,6 +74,17 @@ func (a *AsyncMatrixClient) SendNotice(roomID id.RoomID, message string) {
 	}
 }
 
+func (a *AsyncMatrixClient) SendHTML(roomID id.RoomID, message string) {
+	a.logger.Debug().Str("message", message).Msg("SendText")
+	a.queue <- func(ctx context.Context) error {
+		_, err := a.client.SendMessageEvent(roomID, event.EventMessage, event.MessageEventContent{
+			MsgType:       event.MsgText,
+			FormattedBody: message,
+			Format:        event.FormatHTML,
+		})
+		return err
+	}
+}
 func (a *AsyncMatrixClient) SendText(roomID id.RoomID, message string) {
 	a.logger.Debug().Str("message", message).Msg("SendText")
 	a.queue <- func(ctx context.Context) error {
