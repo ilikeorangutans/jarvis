@@ -21,14 +21,14 @@ func AddWeatherHandler(ctx context.Context, b *bot.Bot) {
 
 	b.On(
 		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
-			client.SendText(evt.RoomID, "Please wait while I fetch the forecast for you...")
+			client.SendText(evt.RoomID, "🌦️ Fetching the forecast for you...")
 			forecast, err := WeatherForecast(ctx, cityCode, FormatFeed)
 			if err != nil {
 				client.SendText(evt.RoomID, fmt.Sprintf("I'm unable to retrieve the forecast. 😔 (%s)", err.Error()))
 				return nil
 			}
 
-			client.SendText(evt.RoomID, forecast)
+			client.SendHTML(evt.RoomID, forecast)
 			return nil
 		},
 
@@ -62,18 +62,29 @@ func WeatherForecast(ctx context.Context, cityCode string, formatWeather func(Fe
 func FormatFeed(feed Feed) (string, error) {
 	// TODO build html
 	var builder strings.Builder
-	builder.WriteString("Weather for ")
+	builder.WriteString("<h2>Weather for ")
 	builder.WriteString(feed.Title)
-	builder.WriteString("\n")
-	builder.WriteString(feed.Warnings())
-	builder.WriteString("\n")
-	builder.WriteString(feed.CurrentCondition())
-
-	for i := 2; i < 6; i++ {
-		builder.WriteString("\n")
-		builder.WriteString(" - ")
-		builder.WriteString(feed.Entries[i].Title)
+	builder.WriteString("</h2>")
+	if feed.HasWarnings() {
+		warnings := feed.Warnings()
+		builder.WriteString("<p><strong>⚠️ ")
+		builder.WriteString(warnings.Title)
+		builder.WriteString("</strong></p>")
+		builder.WriteString("<p>")
+		builder.WriteString(warnings.Summary)
+		builder.WriteString("</p>")
 	}
+	builder.WriteString("<p><strong>🌦️ ")
+	builder.WriteString(feed.CurrentCondition())
+	builder.WriteString("</p></strong>")
+
+	builder.WriteString("<ul>")
+	for i := 2; i < 6; i++ {
+		builder.WriteString("<li>")
+		builder.WriteString(feed.Entries[i].Title)
+		builder.WriteString("</li>")
+	}
+	builder.WriteString("</ul>")
 
 	return builder.String(), nil
 }
@@ -87,8 +98,8 @@ func (f Feed) HasWarnings() bool {
 	return !strings.HasPrefix(strings.ToLower(f.Entries[0].Title), "no watches or warnings")
 }
 
-func (f Feed) Warnings() string {
-	return f.Entries[0].Summary
+func (f Feed) Warnings() Entry {
+	return f.Entries[0]
 }
 
 func (f Feed) CurrentCondition() string {
