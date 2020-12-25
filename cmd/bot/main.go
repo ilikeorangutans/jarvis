@@ -17,6 +17,8 @@ import (
 	"github.com/ilikeorangutans/jarvis/pkg/predicates"
 	"github.com/ilikeorangutans/jarvis/pkg/version"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	bolt "go.etcd.io/bbolt"
@@ -49,6 +51,7 @@ func main() {
 	}
 
 	go func() {
+		http.Handle("/metrics", promhttp.Handler())
 		http.HandleFunc("/services/ping", func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte("pong"))
 		})
@@ -82,15 +85,24 @@ func main() {
 	b, err := bot.NewBot(botConfig, botStorage)
 	ctx, cancel := context.WithCancel(context.Background())
 
+	c := cron.New()
+	c.Start()
+
 	if err := b.Authenticate(ctx); err != nil {
 		log.Fatal().Err(err).Msg("authentication failed")
 	}
-
-	jarvis.AddDiceHandler(b)
 	jarvis.AddWeatherHandler(ctx, b)
+	//jarvis.AddAgendaHandlers(ctx, b)
+	reminders, err := jarvis.NewReminders(b, c)
+	if err != nil {
+		log.Fatal().Err(err).Msg("creating reminders")
+	}
+	reminders.Start(ctx)
+	jarvis.AddReminderHandlers(ctx, b, reminders)
 	b.On(
 		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
 			client.JoinRoomByID(evt.RoomID)
+			client.SendText(evt.RoomID, "👋")
 			return nil
 		},
 		predicates.InvitedToRoom(),
@@ -102,14 +114,16 @@ func main() {
 				log.Error().Err(err).Send()
 			}
 
-			client.SendNotice(
+			client.SendHTML(
 				evt.RoomID,
-				fmt.Sprintf("running since %s, sha %s, build time %s (%s)", humanize.Time(startTime), version.SHA, humanize.Time(t), version.BuildTime),
+				fmt.Sprintf("🤖 running since <strong>%s</strong>, sha <code>%s</code>, build time <strong>%s</strong> (<code>%s</code>)", humanize.Time(startTime), version.SHA, humanize.Time(t), version.BuildTime),
 			)
 			return nil
 		},
-		predicates.MessageMatching(regexp.MustCompile("status")),
-		predicates.AtUser(id.UserID(config.UserID)),
+		predicates.All(
+			predicates.MessageMatching(regexp.MustCompile("status")),
+			predicates.AtUser(id.UserID(config.UserID)),
+		),
 	)
 
 	signals := make(chan os.Signal, 1)
@@ -128,6 +142,21 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Send()
 	}
+}
+
+func agenda(ctx context.Context, client bot.MatrixClient) func() {
+	return func() {
+		log.Info().Msg("agenda")
+
+		forecast, err := jarvis.WeatherForecast(ctx, "on-143", jarvis.FormatFeed)
+		if err != nil {
+			log.Error().Err(err).Msg("could not get weather forecast")
+		}
+		roomID := id.RoomID("!xpfpdJfdQocOPCHqsc:matrix.ilikeorangutans.me")
+		client.SendText(roomID, "Weather for today: ")
+		client.SendText(roomID, forecast)
+	}
+
 }
 
 //func foo() {

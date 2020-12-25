@@ -21,6 +21,7 @@ type MatrixClient interface {
 	SendHTML(id.RoomID, string)
 	SendNotice(id.RoomID, string)
 	SetPresence(event.Presence)
+	SendReaction(roomID id.RoomID, eventID id.EventID, reaction string)
 }
 
 func NewAsyncMatrixClient(client *mautrix.Client) *AsyncMatrixClient {
@@ -46,7 +47,6 @@ func (a *AsyncMatrixClient) Start(ctx context.Context) error {
 				return
 
 			case f := <-a.queue:
-				a.logger.Debug().Msg("handling event")
 				ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 				defer cancel()
 
@@ -58,8 +58,6 @@ func (a *AsyncMatrixClient) Start(ctx context.Context) error {
 				} else if err != nil {
 					log.Error().Err(err).Msg("handling queue")
 				}
-
-				a.logger.Debug().Msg("event handled")
 			}
 		}
 	}()
@@ -97,6 +95,18 @@ func (a *AsyncMatrixClient) JoinRoomByID(roomID id.RoomID) {
 	a.logger.Debug().Msg("JoinRoomByID")
 	a.queue <- func(ctx context.Context) error {
 		_, err := a.client.JoinRoomByID(roomID)
+		return err
+	}
+}
+
+func (a *AsyncMatrixClient) SendReaction(roomID id.RoomID, eventID id.EventID, reaction string) {
+	a.logger.Debug().Str("eventID", eventID.String()).Str("reaction", reaction).Msg("SendReaction")
+	a.queue <- func(ctx context.Context) error {
+		x, err := a.client.SendReaction(roomID, eventID, reaction)
+		if err != nil {
+			a.logger.Error().Err(err).Msg("SendReaction err")
+		}
+		a.logger.Debug().Msgf("SendReaction resp event id %v", x)
 		return err
 	}
 }
