@@ -145,7 +145,14 @@ func AddReminderHandlers(ctx context.Context, b *bot.Bot, reminders *Reminders) 
 			for _, reminder := range list {
 				counter++
 				sb.WriteString("- ")
-				sb.WriteString(reminder.room.String())
+				if reminder.recurring {
+					sb.WriteString("every")
+					sb.WriteString(" ")
+				}
+
+				sb.WriteString(reminder.day)
+				sb.WriteString(reminder.hour)
+				sb.WriteString(strconv.FormatBool(reminder.recurring))
 
 				if counter > 5 {
 					client.SendText(evt.RoomID, sb.String())

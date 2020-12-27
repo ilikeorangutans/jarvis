@@ -92,6 +92,7 @@ func main() {
 		log.Fatal().Err(err).Msg("authentication failed")
 	}
 	jarvis.AddWeatherHandler(ctx, b)
+	jarvis.AddSunriseHandlers(ctx, b)
 	//jarvis.AddAgendaHandlers(ctx, b)
 	reminders, err := jarvis.NewReminders(b, c)
 	if err != nil {
