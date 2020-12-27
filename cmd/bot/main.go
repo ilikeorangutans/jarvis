@@ -64,6 +64,7 @@ func main() {
 		Str("log-level", zerolog.GlobalLevel().String()).
 		Str("sha", version.SHA).
 		Str("build-time", version.BuildTime).
+		Str("go-version", version.GoVersion).
 		Str("data-path", config.DataPath).
 		Str("homeserverURL", config.HomeserverURL.String()).
 		Str("userID", config.UserID).

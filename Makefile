@@ -1,6 +1,7 @@
 SHA=$(shell git rev-parse HEAD)
 NOW=$(shell date +%FT%T%z)
-DIST_LD_FLAGS="-X github.com/ilikeorangutans/jarvis/pkg/version.SHA=$(SHA) -X github.com/ilikeorangutans/jarvis/pkg/version.BuildTime=$(NOW)"
+GO_VERSION=$(shell go version | cut -d ' ' -f 3)
+DIST_LD_FLAGS="-X github.com/ilikeorangutans/jarvis/pkg/version.GoVersion=$(GO_VERSION) -X github.com/ilikeorangutans/jarvis/pkg/version.SHA=$(SHA) -X github.com/ilikeorangutans/jarvis/pkg/version.BuildTime=$(NOW)"
 
 SOURCES=$(shell find ./ -type f -iname '*.go')
 
