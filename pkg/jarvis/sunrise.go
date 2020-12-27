@@ -31,25 +31,25 @@ func AddSunriseHandlers(ctx context.Context, b *bot.Bot) error {
 
 			req, err := http.NewRequest("GET", url, nil)
 			if err != nil {
-				return fmt.Errorf("could not create geolocation request", err)
+				return fmt.Errorf("could not create geolocation request: %w", err)
 			}
 			req.Header.Add("accept", "application/json")
 			req.Header.Add("content-type", "application/json")
 			res, err := http.DefaultClient.Do(req)
 			if err != nil {
-				return fmt.Errorf("could not make geolocation request", err)
+				return fmt.Errorf("could not make geolocation request: %w", err)
 			}
 			defer res.Body.Close()
 			decoder := json.NewDecoder(res.Body)
 			var geolocation geolocationResp
 			err = decoder.Decode(&geolocation)
 			if err != nil {
-				return fmt.Errorf("error decoding json", err)
+				return fmt.Errorf("error decoding json: %w", err)
 			}
 
 			location, err := time.LoadLocation(geolocation.TimeZone)
 			if err != nil {
-				return err
+				return fmt.Errorf("could not load location: %w", err)
 			}
 			now := time.Now()
 			rise, set := sunrise.SunriseSunset(
