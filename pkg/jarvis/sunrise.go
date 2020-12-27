@@ -61,7 +61,7 @@ func AddSunriseHandlers(ctx context.Context, b *bot.Bot) error {
 			return nil
 		},
 		predicates.All(
-			predicates.MessageMatching(regexp.MustCompile(`(?i)\A\s*sunrise|sunset`)),
+			predicates.MessageMatching(regexp.MustCompile(`(?i)\A\s*(sunrise|sunset)`)),
 		),
 	)
 

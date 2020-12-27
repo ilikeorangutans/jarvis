@@ -227,7 +227,10 @@ func (b *Bot) Run(ctx context.Context) error {
 			ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 			defer cancel()
 
-			handler.Func(ctx, b.matrix, source, evt)
+			err := handler.Func(ctx, b.matrix, source, evt)
+			if err != nil {
+				log.Error().Err(err).Msgf("handler failed")
+			}
 		}
 
 		b.client.MarkRead(evt.RoomID, evt.ID)
