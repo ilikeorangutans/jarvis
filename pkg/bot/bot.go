@@ -199,6 +199,7 @@ func (b *Bot) Run(ctx context.Context) error {
 
 	syncer := b.client.Syncer.(*mautrix.DefaultSyncer)
 	syncer.OnEvent(func(source mautrix.EventSource, evt *event.Event) {
+		// TODO ignore events that happened _before_ we joined the room
 		ignoredTypes := []event.Type{event.EphemeralEventReceipt, event.EphemeralEventPresence, event.EphemeralEventTyping}
 		for _, t := range ignoredTypes {
 			if evt.Type == t {
