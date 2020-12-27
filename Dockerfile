@@ -1,5 +1,7 @@
 FROM alpine
 
+RUN apk --no-cache add tzdata
+
 RUN mkdir /app
 RUN mkdir /data
 VOLUME /data
