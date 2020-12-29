@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,6 +13,9 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/sqlite3"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/ilikeorangutans/jarvis/pkg/bot"
 	"github.com/ilikeorangutans/jarvis/pkg/jarvis"
 	"github.com/ilikeorangutans/jarvis/pkg/predicates"
@@ -101,6 +105,19 @@ func main() {
 	}
 	if err := db.Ping(); err != nil {
 		log.Fatal().Err(err).Msg("connecting to database failed")
+	}
+
+	driver, err := sqlite3.WithInstance(db.DB, &sqlite3.Config{})
+	if err != nil {
+		log.Fatal().Err(err).Msg("creating migration driver failed")
+	}
+	m, err := migrate.NewWithDatabaseInstance("file://db/migrations", "sqlite3", driver)
+	if err != nil {
+		log.Fatal().Err(err).Msg("creating migrate failed")
+	}
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		log.Fatal().Err(err).Msg("migrate failed")
 	}
 
 	jarvis.AddWeatherHandler(ctx, b)

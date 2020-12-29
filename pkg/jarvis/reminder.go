@@ -28,8 +28,6 @@ var (
 )
 
 func NewReminders(ctx context.Context, b *bot.Bot, c *cron.Cron, db sqlx.Ext) (*Reminders, error) {
-	db.Exec(`create table if not exists reminders (id integer, recurring numeric, minute text, hour text, day text, message text, room text, user text, created_at datetime, primary key(id));`)
-	db.Exec(`create index if not exsts reminders_users on reminders (user)`)
 	return &Reminders{
 		c:    c,
 		b:    b,
@@ -53,7 +51,7 @@ func (r *Reminders) Start(ctx context.Context) error {
 	log.Info().Int("count", len(reminders)).Msg("rescheduling reminders")
 	for _, reminder := range reminders {
 		if reminder.Recurring {
-			r.schedule(reminder)
+			r.schedule(ctx, reminder)
 		} else {
 		}
 	}
@@ -73,19 +71,24 @@ func (r *Reminders) Start(ctx context.Context) error {
 }
 
 func (r *Reminders) Add(ctx context.Context, reminder *Reminder) error {
-	_, err := sq.
+	result, err := sq.
 		Insert("reminders").
 		Columns("recurring", "minute", "hour", "day", "message", "room", "user", "created_at").
 		Values(reminder.Recurring, reminder.Minute, reminder.Hour, reminder.Day, reminder.Message, reminder.Room, reminder.User, reminder.CreatedAt).
 		RunWith(r.db).
 		ExecContext(ctx)
-
 	if err != nil {
 		return fmt.Errorf("could not insert record: %w", err)
 	}
 
+	id, err := result.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("could not get last inserted id: %w", err)
+	}
+	reminder.ID = id
+
 	if reminder.Recurring {
-		r.schedule(reminder)
+		r.schedule(ctx, reminder)
 	} else {
 
 	}
@@ -93,7 +96,26 @@ func (r *Reminders) Add(ctx context.Context, reminder *Reminder) error {
 	return nil
 }
 
-func (r *Reminders) schedule(reminder *Reminder) {
+func (r *Reminders) FindByID(ctx context.Context, id int64) (*Reminder, error) {
+	reminder := &Reminder{}
+	sql, args := sq.Select("*").From("reminders").Where(sq.Eq{"id": id}).Limit(1).MustSql()
+	err := sqlx.Get(r.db, reminder, sql, args...)
+
+	return reminder, err
+}
+
+func (r *Reminders) Update(ctx context.Context, reminder *Reminder) error {
+	_, err := sq.
+		Update("reminders").
+		Set("entry_id", reminder.EntryID).
+		Where(sq.Eq{"id": reminder.ID}).
+		RunWith(r.db).
+		ExecContext(ctx)
+
+	return err
+}
+
+func (r *Reminders) schedule(ctx context.Context, reminder *Reminder) {
 	// crontab format: minutes / hours / day of month / month / day of week
 
 	spec := []string{}
@@ -111,13 +133,16 @@ func (r *Reminders) schedule(reminder *Reminder) {
 		spec = append(spec, "*")
 	}
 
-	log.Info().Strs("spec", spec).Send()
-	_, err := r.c.AddFunc(strings.Join(spec, " "), func() {
+	entryID, err := r.c.AddFunc(strings.Join(spec, " "), func() {
 		r.sendReminder(reminder)
 	})
-
 	if err != nil {
 		log.Error().Err(err).Msg("could not schedule")
+	}
+
+	reminder.EntryID = &entryID
+	if err := r.Update(ctx, reminder); err != nil {
+		log.Error().Err(err).Msg("could not update")
 	}
 }
 
@@ -127,7 +152,18 @@ func (r *Reminders) sendReminder(reminder *Reminder) {
 	r.b.Client().SendText(reminder.Room, fmt.Sprintf("🗓️ %s, reminding you %s", user, reminder.Message))
 }
 
-func (r *Reminders) Remove(id int64) error {
+func (r *Reminders) Remove(ctx context.Context, id int64) error {
+
+	reminder, err := r.FindByID(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	if reminder.EntryID != nil {
+		log.Info().Int64("id", reminder.ID).Msg("unscheduling")
+		r.c.Remove(*reminder.EntryID)
+	}
+
 	res, err := sq.Delete("reminders").Where(sq.Eq{"id": id}).RunWith(r.db).Exec()
 	if err != nil {
 		return err
@@ -150,7 +186,6 @@ func (r *Reminders) List(userID id.UserID) ([]*Reminder, error) {
 		return nil, fmt.Errorf("could not build query: %w", err)
 	}
 
-	log.Info().Str("sql", sql).Send()
 	if err := sqlx.Select(r.db, &reminders, sql, args...); err != nil {
 		return nil, err
 	}
@@ -177,7 +212,6 @@ func AddReminderHandlers(ctx context.Context, b *bot.Bot, reminders *Reminders) 
 				if err != nil {
 					return err
 				}
-				log.Info().Msgf("%v", reminder)
 				reminder.User = evt.Sender
 				reminder.Room = evt.RoomID
 				reminder.CreatedAt = time.Now()
@@ -202,11 +236,11 @@ func AddReminderHandlers(ctx context.Context, b *bot.Bot, reminders *Reminders) 
 			if err != nil {
 				return err
 			}
-			if err := reminders.Remove(id); err != nil {
+			if err := reminders.Remove(ctx, id); err != nil {
 				client.SendText(evt.RoomID, fmt.Sprintf("Terribly sorry, but I couldn't cancel your reminder %d: %s", id, err))
 				return err
 			} else {
-				client.SendText(evt.RoomID, fmt.Sprintf("✅ Very good, I've canceled your reminder %d.", id))
+				client.SendText(evt.RoomID, fmt.Sprintf("✅ Very good, I've cancelled your reminder %d.", id))
 			}
 
 			return nil
@@ -326,4 +360,5 @@ type Reminder struct {
 	Message   string
 	Room      id.RoomID
 	User      id.UserID
+	EntryID   *cron.EntryID `db:"entry_id"`
 }
