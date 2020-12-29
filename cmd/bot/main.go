@@ -92,7 +92,8 @@ func main() {
 	b, err := bot.NewBot(botConfig, botStorage)
 	ctx, cancel := context.WithCancel(context.Background())
 
-	c := cron.New()
+	location, _ := time.LoadLocation("EST")
+	c := cron.New(cron.WithLocation(location))
 	c.Start()
 
 	if err := b.Authenticate(ctx); err != nil {

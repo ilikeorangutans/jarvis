@@ -116,7 +116,6 @@ func (r *Reminders) Update(ctx context.Context, reminder *Reminder) error {
 }
 
 func (r *Reminders) schedule(ctx context.Context, reminder *Reminder) {
-	// crontab format: minutes / hours / day of month / month / day of week
 
 	spec := []string{}
 	spec = append(spec, reminder.Minute)
