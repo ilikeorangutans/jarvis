@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -18,12 +17,12 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/ilikeorangutans/jarvis/pkg/bot"
 	"github.com/ilikeorangutans/jarvis/pkg/jarvis"
+	"github.com/ilikeorangutans/jarvis/pkg/observability"
 	"github.com/ilikeorangutans/jarvis/pkg/predicates"
 	"github.com/ilikeorangutans/jarvis/pkg/version"
 	"github.com/jmoiron/sqlx"
 	"github.com/kelseyhightower/envconfig"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -42,27 +41,29 @@ type Config struct {
 	DataPath      string   `split_words:"true" required:"true"`
 }
 
+func (c Config) DatabasePath() string {
+	return ""
+}
+
+func (c Config) setupLogging() {
+	if c.FancyLogs {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	}
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if c.Debug {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	}
+}
+
 func main() {
 	var config Config
 	if err := envconfig.Process("jarvis", &config); err != nil {
 		log.Fatal().Err(err).Send()
 	}
 
-	if config.FancyLogs {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
-	}
-	zerolog.SetGlobalLevel(zerolog.InfoLevel)
-	if config.Debug {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	}
+	config.setupLogging()
 
-	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		http.HandleFunc("/services/ping", func(w http.ResponseWriter, r *http.Request) {
-			w.Write([]byte("pong"))
-		})
-		http.ListenAndServe(":8080", nil)
-	}()
+	go observability.MakeObservable()
 
 	startTime := time.Now()
 	log.
