@@ -92,6 +92,7 @@ func main() {
 	b, err := bot.NewBot(botConfig, botStorage)
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// TODO this timezone hack is kinda ugly. We should just translate the times into UTC when we schedule them
 	location, _ := time.LoadLocation("EST")
 	c := cron.New(cron.WithLocation(location))
 	c.Start()
@@ -152,7 +153,7 @@ func main() {
 			return nil
 		},
 		predicates.All(
-			predicates.MessageMatching(regexp.MustCompile("status")),
+			predicates.MessageMatching(regexp.MustCompile(`(?i)\A\s*status`)),
 			predicates.AtUser(id.UserID(config.UserID)),
 		),
 	)
