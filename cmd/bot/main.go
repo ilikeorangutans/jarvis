@@ -40,10 +40,6 @@ type Config struct {
 	DataPath      string   `split_words:"true" required:"true"`
 }
 
-func (c Config) DatabasePath() string {
-	return ""
-}
-
 func (c Config) setupLogging() {
 	if c.FancyLogs {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
@@ -120,6 +116,7 @@ func main() {
 
 	b, err := bot.NewBot(botConfig, botStorage)
 	ctx, cancel := context.WithCancel(context.Background())
+	setupSignalHandlers(cancel)
 
 	// TODO this timezone hack is kinda ugly. We should just translate the times into UTC when we schedule them
 	location, _ := time.LoadLocation("EST")
@@ -166,6 +163,13 @@ func main() {
 		),
 	)
 
+	err = b.Run(ctx)
+	if err != nil {
+		log.Fatal().Err(err).Send()
+	}
+}
+
+func setupSignalHandlers(cancel context.CancelFunc) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
 	go func() {
@@ -178,10 +182,6 @@ func main() {
 		}
 	}()
 
-	err = b.Run(ctx)
-	if err != nil {
-		log.Fatal().Err(err).Send()
-	}
 }
 
 func agenda(ctx context.Context, client bot.MatrixClient) func() {
