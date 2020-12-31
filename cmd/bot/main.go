@@ -55,6 +55,31 @@ func (c Config) setupLogging() {
 	}
 }
 
+func setupDatabase(path string) (*sqlx.DB, error) {
+	db, err := sqlx.Open("sqlite3", path)
+	if err != nil {
+		return nil, fmt.Errorf("could not open database file: %w", err)
+	}
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("could not establish connection to database: %w", err)
+	}
+
+	driver, err := sqlite3.WithInstance(db.DB, &sqlite3.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("could not create migration driver: %w", err)
+	}
+	m, err := migrate.NewWithDatabaseInstance("file://db/migrations", "sqlite3", driver)
+	if err != nil {
+		return nil, fmt.Errorf("could not create migrator: %w", err)
+	}
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return nil, fmt.Errorf("could not migrate: %w", err)
+	}
+
+	return db, nil
+}
+
 func main() {
 	var config Config
 	if err := envconfig.Process("jarvis", &config); err != nil {
@@ -89,7 +114,19 @@ func main() {
 		Username:      config.UserID,
 	}
 
-	botStorage, err := bot.NewBoltBotStorage("jarvis", filestore)
+	db, err := setupDatabase(filepath.Join(config.DataPath, "jarvis.db"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("could not set up database")
+	}
+	defer db.Close()
+
+	boltBotStorage, err := bot.NewBoltBotStorage("jarvis", filestore)
+	sqlBotStorage, err := bot.NewSQLBotStorage(db, log.With().Str("component", "sql-bot-storage").Logger())
+	if err != nil {
+		log.Fatal().Err(err).Msg("could not set up database")
+	}
+
+	botStorage := bot.NewMultiplexStorage(boltBotStorage, sqlBotStorage)
 	b, err := bot.NewBot(botConfig, botStorage)
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -100,27 +137,6 @@ func main() {
 
 	if err := b.Authenticate(ctx); err != nil {
 		log.Fatal().Err(err).Msg("authentication failed")
-	}
-
-	db, err := sqlx.Open("sqlite3", filepath.Join(config.DataPath, "jarvis.db"))
-	if err != nil {
-		log.Fatal().Err(err).Msg("opening database failed")
-	}
-	if err := db.Ping(); err != nil {
-		log.Fatal().Err(err).Msg("connecting to database failed")
-	}
-
-	driver, err := sqlite3.WithInstance(db.DB, &sqlite3.Config{})
-	if err != nil {
-		log.Fatal().Err(err).Msg("creating migration driver failed")
-	}
-	m, err := migrate.NewWithDatabaseInstance("file://db/migrations", "sqlite3", driver)
-	if err != nil {
-		log.Fatal().Err(err).Msg("creating migrate failed")
-	}
-
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		log.Fatal().Err(err).Msg("migrate failed")
 	}
 
 	jarvis.AddWeatherHandler(ctx, b)
