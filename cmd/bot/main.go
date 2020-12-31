@@ -26,7 +26,6 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	bolt "go.etcd.io/bbolt"
 	"maunium.net/go/mautrix"
 	"maunium.net/go/mautrix/event"
 	"maunium.net/go/mautrix/id"
@@ -102,12 +101,6 @@ func main() {
 		Str("userID", config.UserID).
 		Msg("Jarvis starting up")
 
-	filestore, err := bolt.Open(filepath.Join(config.DataPath, "reminder-bot.db"), 0666, nil)
-	if err != nil {
-		log.Fatal().Err(err).Msg("opening database failed")
-	}
-	defer filestore.Close()
-
 	botConfig := bot.BotConfiguration{
 		Password:      config.Password,
 		HomeserverURL: config.HomeserverURL,
@@ -120,13 +113,11 @@ func main() {
 	}
 	defer db.Close()
 
-	boltBotStorage, err := bot.NewBoltBotStorage("jarvis", filestore)
-	sqlBotStorage, err := bot.NewSQLBotStorage(db, log.With().Str("component", "sql-bot-storage").Logger())
+	botStorage, err := bot.NewSQLBotStorage(db, log.With().Str("component", "sql-bot-storage").Logger())
 	if err != nil {
 		log.Fatal().Err(err).Msg("could not set up database")
 	}
 
-	botStorage := bot.NewMultiplexStorage(boltBotStorage, sqlBotStorage)
 	b, err := bot.NewBot(botConfig, botStorage)
 	ctx, cancel := context.WithCancel(context.Background())
 
