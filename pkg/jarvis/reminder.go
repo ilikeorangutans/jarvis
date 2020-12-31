@@ -24,23 +24,21 @@ var (
 	cancelRegex        = regexp.MustCompile(`(?i)\A\s*cancel\s+reminder\s+([0-9]+)`)
 	listRegex          = regexp.MustCompile(`(?i)\A\s*reminders`)
 	messageRegex       = regexp.MustCompile(`(?i)\A\s*remind\s+me\s+(.*)`)
-	timeSpecifierRegex = regexp.MustCompile(`(?i)(this|next|on|every)?\s*(tomorrow|day|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday)(\s+(at\s+([0-9]{1,2}):?([0-9]{2})?(am|pm)?|morning|noon|afternoon|evening|night))?(\s+to\s+.*)?`)
+	timeSpecifierRegex = regexp.MustCompile(`(?i)(this|next|on|every)?\s*(today|tomorrow|day|monday|tuesday|wednesday|thursday|friday|saturday|sunday|weekday)?(\s*(at\s+([0-9]{1,2}):?([0-9]{2})?(am|pm)?|morning|noon|afternoon|evening|night))?(\s+.*)?`)
 )
 
 func NewReminders(ctx context.Context, b *bot.Bot, c *cron.Cron, db sqlx.Ext) (*Reminders, error) {
 	return &Reminders{
-		c:    c,
-		b:    b,
-		list: make(map[id.UserID][]*Reminder),
-		db:   db,
+		c:  c,
+		b:  b,
+		db: db,
 	}, nil
 }
 
 type Reminders struct {
-	c    *cron.Cron
-	b    *bot.Bot
-	list map[id.UserID][]*Reminder
-	db   sqlx.Ext
+	c  *cron.Cron
+	b  *bot.Bot
+	db sqlx.Ext
 }
 
 func (r *Reminders) Start(ctx context.Context) error {
@@ -50,10 +48,7 @@ func (r *Reminders) Start(ctx context.Context) error {
 	}
 	log.Info().Int("count", len(reminders)).Msg("rescheduling reminders")
 	for _, reminder := range reminders {
-		if reminder.Recurring {
-			r.schedule(ctx, reminder)
-		} else {
-		}
+		r.schedule(ctx, reminder)
 	}
 
 	go func() {
@@ -74,7 +69,7 @@ func (r *Reminders) Add(ctx context.Context, reminder *Reminder) error {
 	result, err := sq.
 		Insert("reminders").
 		Columns("recurring", "minute", "hour", "day", "message", "room", "user", "created_at").
-		Values(reminder.Recurring, reminder.Minute, reminder.Hour, reminder.Day, reminder.Message, reminder.Room, reminder.User, reminder.CreatedAt).
+		Values(reminder.Recurring, reminder.Minute, reminder.Hour, reminder.EffectiveDay(), reminder.Message, reminder.Room, reminder.User, reminder.CreatedAt).
 		RunWith(r.db).
 		ExecContext(ctx)
 	if err != nil {
@@ -87,11 +82,7 @@ func (r *Reminders) Add(ctx context.Context, reminder *Reminder) error {
 	}
 	reminder.ID = id
 
-	if reminder.Recurring {
-		r.schedule(ctx, reminder)
-	} else {
-
-	}
+	r.schedule(ctx, reminder)
 
 	return nil
 }
@@ -128,10 +119,15 @@ func (r *Reminders) schedule(ctx context.Context, reminder *Reminder) {
 		spec = append(spec, strings.ToUpper(reminder.Day[0:3]))
 	case "weekday":
 		spec = append(spec, "MON,TUE,WED,THU,FRI")
+	case "today":
+		spec = append(spec, time.Now().Weekday().String()[0:3])
+	case "tomorrow":
+		spec = append(spec, time.Now().AddDate(0, 0, 1).Weekday().String()[0:3])
 	default:
-		spec = append(spec, "*")
+		spec = append(spec, time.Now().Weekday().String()[0:3])
 	}
 
+	log.Info().Str("spec", strings.Join(spec, " ")).Send()
 	entryID, err := r.c.AddFunc(strings.Join(spec, " "), func() {
 		r.sendReminder(reminder)
 	})
@@ -149,9 +145,14 @@ func (r *Reminders) sendReminder(reminder *Reminder) {
 	log.Info().Str("user-id", reminder.User.String()).Str("reminder", reminder.Message).Msg("sending reminder")
 	user, _, _ := reminder.User.Parse()
 	r.b.Client().SendText(reminder.Room, fmt.Sprintf("🗓️ %s, reminding you %s", user, reminder.Message))
+
+	if !reminder.Recurring {
+		go r.Remove(context.Background(), reminder.ID)
+	}
 }
 
 func (r *Reminders) Remove(ctx context.Context, id int64) error {
+	log.Debug().Int64("id", id).Msg("removing reminder")
 
 	reminder, err := r.FindByID(ctx, id)
 	if err != nil {
@@ -360,4 +361,15 @@ type Reminder struct {
 	Room      id.RoomID
 	User      id.UserID
 	EntryID   *cron.EntryID `db:"entry_id"`
+}
+
+func (r *Reminder) EffectiveDay() string {
+	switch r.Day {
+	case "", "today":
+		return time.Now().Weekday().String()
+	case "tomorrow":
+		return time.Now().AddDate(0, 0, 1).Weekday().String()
+	default:
+		return r.Day
+	}
 }
