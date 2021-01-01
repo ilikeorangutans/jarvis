@@ -108,11 +108,13 @@ func (r *Reminders) Update(ctx context.Context, reminder *Reminder) error {
 
 func (r *Reminders) schedule(ctx context.Context, reminder *Reminder) {
 
+	location, _ := time.LoadLocation("EST")
 	spec := []string{}
 	spec = append(spec, reminder.Minute)
 	spec = append(spec, reminder.Hour)
 	spec = append(spec, "*")
 	spec = append(spec, "*")
+	now := time.Now().In(location)
 
 	switch reminder.Day {
 	case "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday":
@@ -120,11 +122,11 @@ func (r *Reminders) schedule(ctx context.Context, reminder *Reminder) {
 	case "weekday":
 		spec = append(spec, "MON,TUE,WED,THU,FRI")
 	case "today":
-		spec = append(spec, time.Now().Weekday().String()[0:3])
+		spec = append(spec, now.Weekday().String()[0:3])
 	case "tomorrow":
-		spec = append(spec, time.Now().AddDate(0, 0, 1).Weekday().String()[0:3])
+		spec = append(spec, now.AddDate(0, 0, 1).Weekday().String()[0:3])
 	default:
-		spec = append(spec, time.Now().Weekday().String()[0:3])
+		spec = append(spec, now.Weekday().String()[0:3])
 	}
 
 	log.Info().Str("spec", strings.Join(spec, " ")).Send()
@@ -194,7 +196,6 @@ func (r *Reminders) List(userID id.UserID) ([]*Reminder, error) {
 }
 
 func AddReminderHandlers(ctx context.Context, b *bot.Bot, reminders *Reminders) error {
-
 	b.On(
 		func(ctx context.Context, client bot.MatrixClient, source mautrix.EventSource, evt *event.Event) error {
 			msg := evt.Content.AsMessage()
