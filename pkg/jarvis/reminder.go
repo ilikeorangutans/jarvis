@@ -66,6 +66,7 @@ func (r *Reminders) Start(ctx context.Context) error {
 }
 
 func (r *Reminders) Add(ctx context.Context, reminder *Reminder) error {
+	log.Info().Msgf("adding reminder %s, %s", reminder.EffectiveDay(), reminder.Day)
 	result, err := sq.
 		Insert("reminders").
 		Columns("recurring", "minute", "hour", "day", "message", "room", "user", "created_at").
@@ -105,32 +106,10 @@ func (r *Reminders) Update(ctx context.Context, reminder *Reminder) error {
 
 	return err
 }
-
 func (r *Reminders) schedule(ctx context.Context, reminder *Reminder) {
-
-	location, _ := time.LoadLocation("EST")
-	spec := []string{}
-	spec = append(spec, reminder.Minute)
-	spec = append(spec, reminder.Hour)
-	spec = append(spec, "*")
-	spec = append(spec, "*")
-	now := time.Now().In(location)
-
-	switch reminder.Day {
-	case "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday":
-		spec = append(spec, strings.ToUpper(reminder.Day[0:3]))
-	case "weekday":
-		spec = append(spec, "MON,TUE,WED,THU,FRI")
-	case "today":
-		spec = append(spec, now.Weekday().String()[0:3])
-	case "tomorrow":
-		spec = append(spec, now.AddDate(0, 0, 1).Weekday().String()[0:3])
-	default:
-		spec = append(spec, now.Weekday().String()[0:3])
-	}
-
-	log.Info().Str("spec", strings.Join(spec, " ")).Send()
-	entryID, err := r.c.AddFunc(strings.Join(spec, " "), func() {
+	spec := reminder.ToSpec()
+	log.Info().Str("spec", spec).Send()
+	entryID, err := r.c.AddFunc(spec, func() {
 		r.sendReminder(reminder)
 	})
 	if err != nil {
@@ -220,9 +199,10 @@ func AddReminderHandlers(ctx context.Context, b *bot.Bot, reminders *Reminders) 
 				if err := reminders.Add(ctx, reminder); err != nil {
 					return err
 				}
+
+				client.SendText(evt.RoomID, fmt.Sprintf("🗓️ New reminder (%d) %s", reminder.ID, reminder))
 			}
 
-			client.SendReaction(evt.RoomID, evt.ID, "🗓️")
 			return nil
 		},
 		predicates.All(
@@ -307,7 +287,7 @@ func AddReminderHandlers(ctx context.Context, b *bot.Bot, reminders *Reminders) 
 
 func ReminderFromParts(parsed []string) (*Reminder, error) {
 	recurring := parsed[1] == "every"
-	day := parsed[2]
+	day := strings.TrimSpace(parsed[2])
 	hour := "08"
 	minute := "00"
 	fuzzyTime := !strings.HasPrefix(parsed[4], "at")
@@ -364,13 +344,84 @@ type Reminder struct {
 	EntryID   *cron.EntryID `db:"entry_id"`
 }
 
-func (r *Reminder) EffectiveDay() string {
+// ResolveDay takes relative day specifiers, like "tomorrow" and resolves them to a specific day of the week.
+func (r *Reminder) ResolveRelativeDay(t time.Time) string {
 	switch r.Day {
-	case "", "today":
-		return time.Now().Weekday().String()
+	case "":
+		hour, err := strconv.Atoi(r.Hour)
+		if err != nil {
+			panic(err)
+		}
+		minute, err := strconv.Atoi(r.Minute)
+		if err != nil {
+			panic(err)
+		}
+		if t.Hour() > hour && t.Minute() > minute {
+			return tomorrow(t)
+		} else {
+			return today(t)
+		}
+	case "today":
+		return today(t)
 	case "tomorrow":
-		return time.Now().AddDate(0, 0, 1).Weekday().String()
+		return tomorrow(t)
 	default:
 		return r.Day
 	}
+}
+
+func today(t time.Time) string {
+	return strings.ToLower(t.Weekday().String())
+}
+
+func tomorrow(t time.Time) string {
+	return strings.ToLower(t.AddDate(0, 0, 1).Weekday().String())
+}
+
+func (r *Reminder) EffectiveDay() string {
+	location, _ := time.LoadLocation("EST")
+	now := time.Now().In(location)
+	resolved := r.ResolveRelativeDay(now)
+	switch resolved {
+	case "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday":
+		return resolved
+	default:
+		return resolved
+	}
+}
+
+func (r *Reminder) ToSpecDay() string {
+	effective := r.EffectiveDay()
+	switch effective {
+	case "weekday":
+		return "MON,TUE,WED,THU,FRI"
+	case "day":
+		return "*"
+	default:
+		return strings.ToUpper(effective[0:3])
+	}
+}
+
+func (r *Reminder) ToSpec() string {
+	spec := []string{}
+	spec = append(spec, r.Minute)      // minute
+	spec = append(spec, r.Hour)        // hour
+	spec = append(spec, "*")           // day of month
+	spec = append(spec, "*")           // month
+	spec = append(spec, r.ToSpecDay()) // weekday
+
+	return strings.Join(spec, " ")
+}
+
+func (r *Reminder) String() string {
+	parts := []string{}
+	if r.Recurring {
+		parts = append(parts, "every")
+	}
+	parts = append(parts, r.EffectiveDay())
+	parts = append(parts, "at")
+	parts = append(parts, fmt.Sprintf("%s:%s:", r.Hour, r.Minute))
+	parts = append(parts, r.Message)
+
+	return strings.Join(parts, " ")
 }

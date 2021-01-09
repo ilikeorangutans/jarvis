@@ -7,7 +7,7 @@ SOURCES=$(shell find ./ -type f -iname '*.go') Makefile go.mod go.sum
 
 .PHONY: run
 run: target/linux-amd64/bot
-	JARVIS_FANCY_LOGS=1 JARVIS_DEBUG=1 ./target/linux-amd64/bot
+	JARVIS_FANCY_LOGS=1 JARVIS_DEBUG=0 ./target/linux-amd64/bot
 
 .PHONY: dist-all
 dist-all: target/linux-arm/bot target/linux-amd64/bot
