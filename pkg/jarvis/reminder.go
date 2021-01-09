@@ -312,7 +312,10 @@ func ReminderFromParts(parsed []string) (*Reminder, error) {
 
 		if twelveHour {
 			i, _ := strconv.Atoi(parsed[5])
-			hour = strconv.Itoa(i + 12)
+			if parsed[7] == "pm" {
+				i += 12
+			}
+			hour = strconv.Itoa(i)
 		} else {
 			hour = parsed[5]
 		}

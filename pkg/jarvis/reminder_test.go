@@ -14,7 +14,7 @@ func TestReminderFromParts(t *testing.T) {
 		input string
 	}{
 		{"at 8am to do foo"},
-		{"today at 8am to do foo"},
+		{"today at 8pm to do foo"},
 		{"tomorrow at 8am to do foo"},
 		{"every day at 8am to do foo"},
 		{"monday at 8am to do foo"},
