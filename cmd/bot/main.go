@@ -127,6 +127,7 @@ func main() {
 		log.Fatal().Err(err).Msg("authentication failed")
 	}
 
+	jarvis.AddDiceHandler(b)
 	jarvis.AddWeatherHandler(ctx, b)
 	jarvis.AddSunriseHandlers(ctx, b)
 	//jarvis.AddAgendaHandlers(ctx, b)
