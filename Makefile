@@ -27,6 +27,6 @@ clean:
 
 .PHONY: docker
 docker:
-	docker buildx build -f Dockerfile . --build-arg SHA=$(SHA) -t registry.ilikeorangutans.me/apps/jarvis:$(SHA) -t registry.ilikeorangutans.me/apps/jarvis:latest --platform  linux/arm/v7 --load
+	docker buildx build -f Dockerfile . --build-arg GOOS=linux --build-arg GOARCH=arm --progress plain --build-arg SHA=$(SHA) -t registry.ilikeorangutans.me/apps/jarvis:$(SHA) -t registry.ilikeorangutans.me/apps/jarvis:latest --platform  linux/arm/v7 --load
 	docker push registry.ilikeorangutans.me/apps/jarvis:$(SHA)
 	docker push registry.ilikeorangutans.me/apps/jarvis:latest
