@@ -1,10 +1,10 @@
-FROM golang:1 AS builder
+FROM golang:1-alpine AS builder
 
 ARG SHA
 ARG GOOS
 ARG GOARCH
 
-#RUN apt-get update && apt-get upgrade -y dpkg && apt-get -y install build-essential
+RUN apk add make gcc musl-dev
 
 RUN mkdir /app && mkdir /data
 WORKDIR /app
@@ -29,5 +29,3 @@ WORKDIR /app
 
 COPY --from=builder /app/target/$GOOS-$GOARCH/bot /app/bot
 COPY db /app/db
-
-ENTRYPOINT ["/app/bot"]
