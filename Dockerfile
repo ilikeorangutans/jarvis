@@ -9,7 +9,7 @@ RUN apk add make gcc musl-dev
 RUN mkdir /app && mkdir /data
 WORKDIR /app
 COPY go.mod go.sum /app/
-RUN go mod download && go build github.com/mattn/go-sqlite3 && go build github.com/prometheus/client_golang && go build github.com/rs/zerolog && go build maunium.net/go/mautrix
+RUN go mod download && go build github.com/mattn/go-sqlite3 && go build github.com/rs/zerolog && go build maunium.net/go/mautrix
 
 COPY . /app/
 
