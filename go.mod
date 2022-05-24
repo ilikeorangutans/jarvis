@@ -8,6 +8,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.14.1
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0
+	github.com/joeshaw/myq v0.0.0-20211219033431-d60bd9ba0e43
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/mattn/go-sqlite3 v1.14.9
 	github.com/nathan-osman/go-sunrise v0.0.0-20201029015502-9a83cd1a5746
